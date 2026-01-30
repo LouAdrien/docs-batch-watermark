@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
 Add a semi-transparent text watermark to every page of every PDF
-in "Autre pièces dossier pret" and its subfolders.
-Output is written to "Autre pièces dossier pret - watermarked" (originals unchanged).
+in the source folder and its subfolders. Non-PDF files (e.g. JPG, PNG)
+are copied to the output folder unchanged.
+Output is written to the configured output folder (originals unchanged).
 """
 
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -66,9 +68,12 @@ def main() -> None:
     if not SOURCE_FOLDER.is_dir():
         raise SystemExit(f"Source folder not found: {SOURCE_FOLDER}")
 
-    pdf_files = list(SOURCE_FOLDER.rglob("*.pdf"))
-    if not pdf_files:
-        print("No PDF files found in", SOURCE_FOLDER)
+    all_files = [p for p in SOURCE_FOLDER.rglob("*") if p.is_file()]
+    pdf_files = [p for p in all_files if p.suffix.lower() == ".pdf"]
+    other_files = [p for p in all_files if p not in pdf_files]
+
+    if not all_files:
+        print("No files found in", SOURCE_FOLDER)
         return
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -83,7 +88,14 @@ def main() -> None:
             print("Watermarking:", rel)
             watermark_pdf(pdf_path, out_path, stamp_page)
 
-        print(f"\nDone. {len(pdf_files)} PDF(s) written to:\n  {OUTPUT_FOLDER}")
+        for other_path in other_files:
+            rel = other_path.relative_to(SOURCE_FOLDER)
+            out_path = OUTPUT_FOLDER / rel
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(other_path, out_path)
+            print("Copied:", rel)
+
+        print(f"\nDone. {len(pdf_files)} PDF(s) watermarked, {len(other_files)} file(s) copied to:\n  {OUTPUT_FOLDER}")
     finally:
         tmp_path.unlink(missing_ok=True)
 
